@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, Database } from "lucide-react"
+import { Loader2, Database, RefreshCw } from "lucide-react"
 
 interface Story {
   id: string
@@ -73,10 +73,19 @@ export default function StoriesPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto py-8 px-4 mt-16">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Your Stories</h1>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={fetchStories}
+            disabled={loading}
+            className="flex items-center gap-2 bg-black/60 backdrop-blur-sm border-white/20 hover:bg-black/70 hover:border-white/40 transition-all shadow-lg"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {loading ? "Refreshing..." : "Refresh"}
+          </Button>
           {stories.length === 0 && (
             <Button
               variant="outline"

@@ -1,19 +1,17 @@
 import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase"
 
-export async function PUT(
+export async function PATCH(
   request: Request,
   context: { params: { id: string } }
 ) {
   try {
     const storyId = context.params.id
-    const { sceneIndex, imageUrl } = await request.json()
+    const { scenes } = await request.json()
 
-    if (sceneIndex === undefined || !imageUrl) {
-      return NextResponse.json({ error: "Scene index and image URL are required" }, { status: 400 })
+    if (!scenes) {
+      return NextResponse.json({ error: "Scenes data is required" }, { status: 400 })
     }
-
-    console.log(`Updating scene ${sceneIndex} with image URL for story ${storyId}`)
 
     const supabase = createServerSupabaseClient()
 
@@ -29,10 +27,10 @@ export async function PUT(
       return NextResponse.json({ error: "Failed to fetch story" }, { status: 500 })
     }
 
-    // Update the scene with the image URL
+    // Update the scenes in the story data
     const storyData = story.story_data
-    if (storyData && storyData.scenes && storyData.scenes[sceneIndex]) {
-      storyData.scenes[sceneIndex].image_url = imageUrl
+    if (storyData) {
+      storyData.scenes = scenes
 
       // Update the story in the database
       const { error: updateError } = await supabase
@@ -45,14 +43,12 @@ export async function PUT(
         return NextResponse.json({ error: "Failed to update story" }, { status: 500 })
       }
 
-      console.log(`Scene ${sceneIndex} updated successfully`)
-      return NextResponse.json({ success: true, scene: storyData.scenes[sceneIndex] })
+      return NextResponse.json({ success: true, scenes: storyData.scenes })
     } else {
-      console.error("Scene not found in story data")
-      return NextResponse.json({ error: "Scene not found" }, { status: 404 })
+      return NextResponse.json({ error: "Story data not found" }, { status: 404 })
     }
   } catch (error) {
-    console.error("Error updating scene:", error)
+    console.error("Error updating story:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+} 

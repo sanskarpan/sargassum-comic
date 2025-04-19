@@ -3,6 +3,15 @@ import { experimental_generateImage as generateImage } from "ai"
 import { NextResponse } from "next/server"
 import { uploadImageToBlob } from "@/lib/blob-storage"
 
+// Check if required environment variables are set
+if (!process.env.REPLICATE_API_TOKEN) {
+  console.error("REPLICATE_API_TOKEN environment variable is not set");
+}
+
+if (!process.env.BLOB_READ_WRITE_TOKEN) {
+  console.error("BLOB_READ_WRITE_TOKEN environment variable is not set");
+}
+
 // Define valid image sizes
 type ImageSize = "1024x1024" | "1024x576" | "1024x683" | "1024x768" | "576x1024" | "768x1024" | "819x1024"
 
@@ -12,6 +21,8 @@ export async function POST(request: Request) {
 
     console.log("Generating image with prompt:", prompt)
     console.log("Using aspect ratio:", aspectRatio || "default")
+    console.log("Story ID:", storyId)
+    console.log("Scene index:", sceneIndex)
 
     // Determine image size based on aspect ratio
     let size: ImageSize = "1024x1024" // Default square

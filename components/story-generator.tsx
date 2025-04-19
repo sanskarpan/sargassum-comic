@@ -147,41 +147,127 @@ export default function StoryGenerator() {
     }
   }
 
-  // Generate an image for a scene
-  const generateSceneImage = async (scene: Scene, index: number) => {
-    if (!currentStoryId) return
-
-    setGeneratingImageForScene(index)
+  // Verify that a story exists in the database
+  const verifyStorySaved = async (storyId: string): Promise<boolean> => {
     try {
-      const prompt = `${scene.setting} with ${scene.conflict}. High quality, detailed illustration.`
-      const imageUrl = await generateImage(prompt, currentStoryId, index)
+      console.log(`Verifying story ${storyId} was saved correctly`);
+      const response = await fetch(`/api/stories?id=${storyId}`);
+      
+      if (!response.ok) {
+        console.error(`Failed to verify story ${storyId}: ${response.status}`);
+        return false;
+      }
+      
+      const data = await response.json();
+      if (data.story && data.story.id === storyId) {
+        console.log(`Story ${storyId} verified successfully`);
+        return true;
+      } else {
+        console.error(`Story ${storyId} verification failed: Story not found in response`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`Error verifying story ${storyId}:`, error);
+      return false;
+    }
+  }
+
+  // Generate an image for a scene
+  const generateSceneImage = async (scene: Scene, index: number, retryCount = 0) => {
+    if (!currentStoryId) {
+      console.error("Cannot generate image: No story ID available");
+      console.log("Current story package:", storyPackage);
+      
+      // If we have a story package but no ID, try saving it first
+      if (storyPackage && storyPackage.story && storyPackage.story.length > 0 && !currentStoryId) {
+        try {
+          console.log("Attempting to save story before generating image");
+          const storyId = await createStory(storyPackage);
+          console.log("Story saved with ID:", storyId);
+          setCurrentStoryId(storyId);
+          
+          // Now recursively call this function again with the new story ID
+          setTimeout(() => generateSceneImage(scene, index, retryCount), 500);
+          return;
+        } catch (error) {
+          console.error("Failed to save story before generating image:", error);
+          setError("Failed to save story. Please try again.");
+          return;
+        }
+      } else {
+        setError("Cannot generate image: Story hasn't been saved yet");
+        return;
+      }
+    }
+
+    setGeneratingImageForScene(index);
+    setError(null);
+    
+    try {
+      console.log(`Generating image for scene ${index}: "${scene.title}"`);
+      console.log("Using story ID:", currentStoryId);
+      const prompt = `${scene.setting} with ${scene.conflict}. High quality, detailed illustration.`;
+      console.log("Using prompt:", prompt);
+      
+      // Generate the image
+      const imageUrl = await generateImage(prompt, currentStoryId, index);
+      console.log("Image generated successfully:", imageUrl);
 
       // Update the scene with the image URL
       if (storyPackage) {
-        const updatedScenes = [...storyPackage.scenes]
-        updatedScenes[index] = { ...scene, image_url: imageUrl }
+        const updatedScenes = [...storyPackage.scenes];
+        updatedScenes[index] = { ...scene, image_url: imageUrl };
 
+        // Update the local state first
         setStoryPackage({
           ...storyPackage,
           scenes: updatedScenes,
-        })
+        });
 
-        // Update the story in the database
-        await fetch(`/api/stories/${currentStoryId}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            scenes: updatedScenes,
-          }),
-        })
+        // Update the story in the database - use scenes endpoint for individual scene updates
+        try {
+          console.log(`Updating scene ${index} in database`);
+          const response = await fetch(`/api/stories/${currentStoryId}/scenes`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              sceneIndex: index,
+              imageUrl,
+            }),
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error("Failed to update scene in database:", errorData);
+          } else {
+            const data = await response.json();
+            console.log("Scene updated successfully in database:", data);
+          }
+        } catch (updateError) {
+          console.error("Error updating scene in database:", updateError);
+          // Continue without throwing - the UI already shows the image
+        }
       }
     } catch (error) {
-      console.error("Failed to generate image:", error)
-      setError(error instanceof Error ? error.message : "Failed to generate image")
+      console.error("Failed to generate image:", error);
+      
+      // Retry up to 2 times if there's a failure
+      if (retryCount < 2) {
+        console.log(`Retrying image generation (attempt ${retryCount + 1})...`);
+        setTimeout(() => {
+          generateSceneImage(scene, index, retryCount + 1);
+        }, 2000); // Wait 2 seconds before retrying
+        return;
+      }
+      
+      setError(error instanceof Error ? error.message : "Failed to generate image");
     } finally {
-      setGeneratingImageForScene(null)
+      if (retryCount === 0 || retryCount === 2) {
+        // Only reset loading state if this is the first attempt or the last retry
+        setGeneratingImageForScene(null);
+      }
     }
   }
 
@@ -242,6 +328,8 @@ export default function StoryGenerator() {
       const reader = response.body?.getReader()
       if (!reader) throw new Error("Failed to get response reader")
 
+      let finalStoryPackage = { ...emptyStoryPackage };
+      
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -258,43 +346,74 @@ export default function StoryGenerator() {
             setStoryPackage(prev => {
               if (!prev) return prev
               
+              const updatedPackage = {...prev};
+              
               switch (data.type) {
                 case 'structure':
                   setGenerationStep('structure')
                   setProgress(25)
-                  return {
-                    ...prev,
-                    title: data.data.title,
-                    tagline: data.data.tagline,
-                    summary: data.data.summary,
-                    outline: data.data.outline
-                  }
+                  updatedPackage.title = data.data.title;
+                  updatedPackage.tagline = data.data.tagline;
+                  updatedPackage.summary = data.data.summary;
+                  updatedPackage.outline = data.data.outline;
+                  
+                  // Also update our final package
+                  finalStoryPackage.title = data.data.title;
+                  finalStoryPackage.tagline = data.data.tagline;
+                  finalStoryPackage.summary = data.data.summary;
+                  finalStoryPackage.outline = data.data.outline;
+                  break;
                 case 'characters':
                   setGenerationStep('characters')
                   setProgress(50)
-                  return {
-                    ...prev,
-                    characters: data.data
-                  }
+                  updatedPackage.characters = data.data;
+                  
+                  // Also update our final package
+                  finalStoryPackage.characters = data.data;
+                  break;
                 case 'scenes':
                   setGenerationStep('scenes')
                   setProgress(75)
-                  return {
-                    ...prev,
-                    scenes: data.data
-                  }
+                  updatedPackage.scenes = data.data;
+                  
+                  // Also update our final package
+                  finalStoryPackage.scenes = data.data;
+                  break;
                 case 'story':
                   setGenerationStep('story')
                   setProgress(100)
-                  return {
-                    ...prev,
-                    story: data.data
-                  }
+                  updatedPackage.story = data.data;
+                  
+                  // Calculate metadata immediately when story is received
+                  // Calculate total word count
+                  const allText = data.data
+                    .flatMap((beat: any) => beat.paragraphs)
+                    .join(' ');
+                  const wordCount = allText.split(/\s+/).filter((word: string) => word.length > 0).length;
+                  
+                  // Estimate reading time
+                  const readTimeMinutes = Math.ceil(wordCount / 200);
+                  
+                  updatedPackage.metadata = {
+                    word_count: wordCount,
+                    read_time_minutes: readTimeMinutes
+                  };
+                  
+                  // Also update our final package
+                  finalStoryPackage.story = data.data;
+                  finalStoryPackage.metadata = {
+                    word_count: wordCount,
+                    read_time_minutes: readTimeMinutes
+                  };
+                  break;
+                case 'complete':
+                  // No changes needed for complete message
+                  break;
                 case 'error':
                   throw new Error(data.error)
-                default:
-                  return prev
               }
+              
+              return updatedPackage;
             })
           } catch (error) {
             console.error("Error parsing streaming data:", error)
@@ -302,21 +421,39 @@ export default function StoryGenerator() {
         }
       }
 
-      // Create a new story in the database
-      if (storyPackage) {
-        const storyId = await createStory(storyPackage)
-        setCurrentStoryId(storyId)
-
-        // Update prompt history to mark this prompt as used
-        const supabase = createClientSupabaseClient()
-        await supabase.from("prompt_history").update({ was_used: true }).eq("prompt", initialPrompt)
+      // Now save the story to the database after we have the complete data
+      if (finalStoryPackage.story && finalStoryPackage.story.length > 0) {
+        console.log("Final story package ready to save:", finalStoryPackage.title);
+        try {
+          const storyId = await createStory(finalStoryPackage);
+          console.log("Story saved successfully with ID:", storyId);
+          setCurrentStoryId(storyId);
+          
+          // Show success message to the user
+          setError(null); // Clear any previous errors
+          
+          // Update prompt history to mark this prompt as used
+          const supabase = createClientSupabaseClient();
+          await supabase.from("prompt_history").update({ was_used: true }).eq("prompt", initialPrompt);
+          
+          // Show a success toast or message
+          console.log(`Story "${finalStoryPackage.title}" created successfully! You can now generate images for each scene.`);
+          
+        } catch (saveError) {
+          console.error("Failed to save story:", saveError);
+          setError(saveError instanceof Error ? `Story was generated but couldn't be saved: ${saveError.message}` : "Story was generated but couldn't be saved");
+        }
+      } else {
+        console.error("Cannot save story: No story content generated");
+        setError("Story generation incomplete - no story content was generated");
       }
+
     } catch (error) {
-      console.error("Failed to generate story:", error)
-      setError(error instanceof Error ? error.message : "Failed to generate story")
+      console.error("Failed to generate story:", error);
+      setError(error instanceof Error ? error.message : "Failed to generate story");
     } finally {
-      setIsGenerating(false)
-      setGenerationStep('idle')
+      setIsGenerating(false);
+      setGenerationStep('idle');
     }
   }
 
@@ -371,7 +508,7 @@ export default function StoryGenerator() {
         </div>
 
         <div className="mb-6">
-          {scene.image_url && !generatingImageForScene ? (
+          {scene.image_url ? (
             <div className="rounded-lg overflow-hidden">
               <img
                 src={scene.image_url}
@@ -380,7 +517,10 @@ export default function StoryGenerator() {
               />
             </div>
           ) : (
-            <ImagePlaceholder isGenerating={generatingImageForScene === index} />
+            <ImagePlaceholder 
+              isGenerating={generatingImageForScene === index} 
+              onClick={() => !generatingImageForScene && generateSceneImage(scene, index)}
+            />
           )}
         </div>
 
@@ -574,7 +714,7 @@ export default function StoryGenerator() {
           />
         </div>
       ) : (
-        <div className="w-full max-w-4xl mx-auto px-4 py-12">
+        <div className="w-full max-w-4xl mx-auto px-4 py-12 mt-16">
           <div className="fixed top-4 right-4 z-10 flex gap-2">
             <Link href="/stories">
               <Button
@@ -654,7 +794,7 @@ export default function StoryGenerator() {
             {/* Story Summary */}
             <Card className="bg-black/40 border-white/10 transform transition-all duration-500 animate-slide-up">
               <CardContent className="p-6">
-                <h2 className="text-xl font-semibold mb-4">Story Summary</h2>
+                <h2 className="text-xl font-semibold mb-4 text-white">Story Summary</h2>
                 <p className="text-white/90 leading-relaxed">{storyPackage.summary}</p>
               </CardContent>
             </Card>
@@ -670,7 +810,7 @@ export default function StoryGenerator() {
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <CardContent className="p-4">
-                      <h3 className="text-lg font-semibold">{character.name}</h3>
+                      <h3 className="text-lg font-semibold text-white">{character.name}</h3>
                       <p className="text-white/70 text-sm mb-2">
                         <span className="font-medium">{character.role}</span> • {character.arc}
                       </p>

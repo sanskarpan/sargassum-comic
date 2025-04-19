@@ -170,7 +170,7 @@ export default function StoryViewPage() {
         </Button>
       </div>
 
-      <div className="container mx-auto py-12 px-4 max-w-4xl">
+      <div className="container mx-auto py-12 px-4 max-w-4xl mt-16">
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold mb-2">{storyData.title}</h1>
           <p className="text-xl text-white/80 italic">{storyData.tagline}</p>
@@ -180,7 +180,7 @@ export default function StoryViewPage() {
         <div className="space-y-12">
           {/* Story Summary */}
           <div className="bg-black/40 border border-white/10 rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Story Summary</h2>
+            <h2 className="text-xl font-semibold mb-4 ">Story Summary</h2>
             <p className="text-white/90 leading-relaxed">{storyData.summary}</p>
           </div>
 
@@ -220,7 +220,7 @@ export default function StoryViewPage() {
                 </div>
 
                 <div className="mb-6">
-                  {scene.image_url && !generatingImageForScene ? (
+                  {scene.image_url ? (
                     <div className="rounded-lg overflow-hidden">
                       <img
                         src={scene.image_url}
@@ -229,7 +229,10 @@ export default function StoryViewPage() {
                       />
                     </div>
                   ) : (
-                    <ImagePlaceholder isGenerating={generatingImageForScene === index} />
+                    <ImagePlaceholder 
+                      isGenerating={generatingImageForScene === index}
+                      onClick={() => !generatingImageForScene && generateSceneImage(scene, index)}
+                    />
                   )}
                 </div>
 
