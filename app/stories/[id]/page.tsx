@@ -225,7 +225,7 @@ export default function StoryViewPage() {
                       <img
                         src={scene.image_url}
                         alt={scene.title}
-                        className="w-full h-auto object-contain max-h-[600px] mx-auto"
+                        className="w-full h-auto object-cover max-h-[400px]"
                       />
                     </div>
                   ) : (

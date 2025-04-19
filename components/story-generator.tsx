@@ -250,6 +250,60 @@ export default function StoryGenerator() {
     window.location.reload()
   }
 
+  // Update the scene rendering section to use the ImagePlaceholder
+  const renderScene = (scene: Scene, index: number) => {
+    return (
+      <div key={index} className="mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold">{scene.title}</h3>
+          {!scene.image_url && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateSceneImage(scene, index)}
+              disabled={generatingImageForScene !== null}
+              className="bg-black/40 border-white/20"
+            >
+              {generatingImageForScene === index ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <ImageIcon className="h-4 w-4 mr-2" />
+              )}
+              Generate Image
+            </Button>
+          )}
+        </div>
+
+        <div className="mb-4 text-sm text-white/70">
+          <p>
+            <strong>Setting:</strong> {scene.setting}
+          </p>
+          <p>
+            <strong>POV:</strong> {scene.pov}
+          </p>
+        </div>
+
+        <div className="mb-6">
+          {scene.image_url && !generatingImageForScene ? (
+            <div className="rounded-lg overflow-hidden">
+              <img
+                src={scene.image_url}
+                alt={scene.title}
+                className="w-full h-auto object-cover max-h-[400px]"
+              />
+            </div>
+          ) : (
+            <ImagePlaceholder isGenerating={generatingImageForScene === index} />
+          )}
+        </div>
+
+        <StoryRenderer
+          content={storyPackage?.story.find((s) => s.beat === scene.beat)?.paragraphs.join("\n\n") || ""}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col items-center min-h-screen w-full">
       {!storyPackage ? (
@@ -512,59 +566,9 @@ export default function StoryGenerator() {
             </div>
 
             {/* Story Content with Images */}
-            <div>
-              <h2 className="text-2xl font-bold mb-6">Story</h2>
-
-              {storyPackage.scenes.map((scene, index) => (
-                <div key={index} className="mb-8">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold">{scene.title}</h3>
-                    {!scene.image_url && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => generateSceneImage(scene, index)}
-                        disabled={generatingImageForScene !== null}
-                        className="bg-black/40 border-white/20"
-                      >
-                        {generatingImageForScene === index ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        ) : (
-                          <ImageIcon className="h-4 w-4 mr-2" />
-                        )}
-                        Generate Image
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="mb-4 text-sm text-white/70">
-                    <p>
-                      <strong>Setting:</strong> {scene.setting}
-                    </p>
-                    <p>
-                      <strong>POV:</strong> {scene.pov}
-                    </p>
-                  </div>
-
-                  <div className="mb-6">
-                    {scene.image_url && !generatingImageForScene ? (
-                      <div className="rounded-lg overflow-hidden">
-                        <img
-                          src={scene.image_url}
-                          alt={scene.title}
-                          className="w-full h-auto object-contain max-h-[600px] mx-auto"
-                        />
-                      </div>
-                    ) : (
-                      <ImagePlaceholder isGenerating={generatingImageForScene === index} />
-                    )}
-                  </div>
-
-                  <StoryRenderer
-                    content={storyPackage.story.find((s) => s.beat === scene.beat)?.paragraphs.join("\n\n") || ""}
-                  />
-                </div>
-              ))}
+            <div className="mt-8 space-y-8">
+              <h2 className="text-2xl font-bold">Your Story</h2>
+              {storyPackage.scenes.map((scene, index) => renderScene(scene, index))}
             </div>
 
             {/* Metadata */}
