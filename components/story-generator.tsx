@@ -201,7 +201,7 @@ export default function StoryGenerator() {
         theme: initialPrompt,
       }
 
-      // Generate the story
+      // Generate the story with streaming
       const response = await fetch("/api/generate-story", {
         method: "POST",
         headers: {
@@ -215,16 +215,91 @@ export default function StoryGenerator() {
         throw new Error(errorData.error || `Server responded with ${response.status}`)
       }
 
-      const data = await response.json()
-      setStoryPackage(data.storyPackage)
+      // Initialize an empty story package
+      const emptyStoryPackage: StoryPackage = {
+        version: "1.0.0",
+        generated_at: new Date().toISOString(),
+        request_spec: requestSpec,
+        title: "",
+        tagline: "",
+        summary: "",
+        characters: [],
+        outline: [],
+        scenes: [],
+        story: [],
+        metadata: {
+          word_count: 0,
+          read_time_minutes: 0
+        }
+      }
+
+      setStoryPackage(emptyStoryPackage)
+
+      // Handle streaming response
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error("Failed to get response reader")
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        // Convert the chunk to text
+        const chunk = new TextDecoder().decode(value)
+        const lines = chunk.split('\n').filter(line => line.trim())
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line)
+            
+            // Update the story package based on the type of data received
+            setStoryPackage(prev => {
+              if (!prev) return prev
+              
+              switch (data.type) {
+                case 'structure':
+                  return {
+                    ...prev,
+                    title: data.data.title,
+                    tagline: data.data.tagline,
+                    summary: data.data.summary,
+                    outline: data.data.outline
+                  }
+                case 'characters':
+                  return {
+                    ...prev,
+                    characters: data.data
+                  }
+                case 'scenes':
+                  return {
+                    ...prev,
+                    scenes: data.data
+                  }
+                case 'story':
+                  return {
+                    ...prev,
+                    story: data.data
+                  }
+                case 'error':
+                  throw new Error(data.error)
+                default:
+                  return prev
+              }
+            })
+          } catch (error) {
+            console.error("Error parsing streaming data:", error)
+          }
+        }
+      }
 
       // Create a new story in the database
-      const storyId = await createStory(data.storyPackage)
-      setCurrentStoryId(storyId)
+      if (storyPackage) {
+        const storyId = await createStory(storyPackage)
+        setCurrentStoryId(storyId)
 
-      // Update prompt history to mark this prompt as used
-      const supabase = createClientSupabaseClient()
-      await supabase.from("prompt_history").update({ was_used: true }).eq("prompt", initialPrompt)
+        // Update prompt history to mark this prompt as used
+        const supabase = createClientSupabaseClient()
+        await supabase.from("prompt_history").update({ was_used: true }).eq("prompt", initialPrompt)
+      }
     } catch (error) {
       console.error("Failed to generate story:", error)
       setError(error instanceof Error ? error.message : "Failed to generate story")
