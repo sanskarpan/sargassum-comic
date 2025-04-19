@@ -112,7 +112,7 @@ export function PromptSuggestions({ onSelectPrompt, selectedPrompt, onOpenModal 
     <div className="w-full">
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-sm font-medium text-white/90">Story Inspirations</h2>
-        <p className="text-xs text-white/60">Click for details</p>
+        {/* <p className="text-xs text-white/60">Click for details</p> */}
       </div>
       <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
         {DETAILED_SUGGESTIONS.map((suggestion, index) => (
