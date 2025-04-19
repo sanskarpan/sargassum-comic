@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
-import { Loader2, AlertCircle, Sparkles, Info, BookOpen, LogOut, ImageIcon } from "lucide-react"
+import { Loader2, AlertCircle, Sparkles, Info, BookOpen, LogOut, ImageIcon, PenTool, Users, BookText, BookOpenCheck } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { PromptSuggestions, DETAILED_SUGGESTIONS } from "@/components/prompt-suggestions"
 import { PromptModal } from "@/components/prompt-modal"
@@ -85,6 +85,8 @@ export default function StoryGenerator() {
   const [genre, setGenre] = useState("")
   const [tone, setTone] = useState("")
   const [wordCount, setWordCount] = useState(1500)
+  const [generationStep, setGenerationStep] = useState<'idle' | 'structure' | 'characters' | 'scenes' | 'story'>('idle')
+  const [progress, setProgress] = useState(0)
 
   // Improve the prompt using AI
   const improvePrompt = async () => {
@@ -165,14 +167,13 @@ export default function StoryGenerator() {
         })
 
         // Update the story in the database
-        await fetch(`/api/stories/${currentStoryId}/scenes`, {
-          method: "PUT",
+        await fetch(`/api/stories/${currentStoryId}`, {
+          method: "PATCH",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            sceneIndex: index,
-            imageUrl,
+            scenes: updatedScenes,
           }),
         })
       }
@@ -190,6 +191,8 @@ export default function StoryGenerator() {
 
     setIsGenerating(true)
     setError(null)
+    setGenerationStep('idle')
+    setProgress(0)
 
     try {
       // Create request spec
@@ -199,20 +202,6 @@ export default function StoryGenerator() {
         tone: tone || "engaging",
         length_words: wordCount,
         theme: initialPrompt,
-      }
-
-      // Generate the story with streaming
-      const response = await fetch("/api/generate-story", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ requestSpec }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Server responded with ${response.status}`)
       }
 
       // Initialize an empty story package
@@ -234,6 +223,20 @@ export default function StoryGenerator() {
       }
 
       setStoryPackage(emptyStoryPackage)
+
+      // Generate the story with streaming
+      const response = await fetch("/api/generate-story", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ requestSpec }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Server responded with ${response.status}`)
+      }
 
       // Handle streaming response
       const reader = response.body?.getReader()
@@ -257,6 +260,8 @@ export default function StoryGenerator() {
               
               switch (data.type) {
                 case 'structure':
+                  setGenerationStep('structure')
+                  setProgress(25)
                   return {
                     ...prev,
                     title: data.data.title,
@@ -265,16 +270,22 @@ export default function StoryGenerator() {
                     outline: data.data.outline
                   }
                 case 'characters':
+                  setGenerationStep('characters')
+                  setProgress(50)
                   return {
                     ...prev,
                     characters: data.data
                   }
                 case 'scenes':
+                  setGenerationStep('scenes')
+                  setProgress(75)
                   return {
                     ...prev,
                     scenes: data.data
                   }
                 case 'story':
+                  setGenerationStep('story')
+                  setProgress(100)
                   return {
                     ...prev,
                     story: data.data
@@ -305,6 +316,7 @@ export default function StoryGenerator() {
       setError(error instanceof Error ? error.message : "Failed to generate story")
     } finally {
       setIsGenerating(false)
+      setGenerationStep('idle')
     }
   }
 
@@ -598,15 +610,49 @@ export default function StoryGenerator() {
             </Button>
           </div>
 
-          <div className="mb-8 text-center">
-            <h1 className="text-4xl font-bold mb-2">{storyPackage.title}</h1>
-            <p className="text-xl text-white/80 italic">{storyPackage.tagline}</p>
-          </div>
+          {/* Generation Progress Indicator */}
+          {isGenerating && (
+            <div className="fixed top-0 left-0 w-full h-1 bg-black/20">
+              <div 
+                className="h-full bg-gradient-to-r from-purple-600 to-indigo-600 transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
 
-          {/* Story Content */}
+          {/* Generation Status */}
+          {isGenerating && (
+            <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-sm border border-white/10 rounded-full px-6 py-2 flex items-center gap-3 shadow-lg animate-fade-in">
+              <div className="flex items-center gap-2">
+                {generationStep === 'structure' && <PenTool className="h-4 w-4 text-purple-400" />}
+                {generationStep === 'characters' && <Users className="h-4 w-4 text-blue-400" />}
+                {generationStep === 'scenes' && <BookText className="h-4 w-4 text-indigo-400" />}
+                {generationStep === 'story' && <BookOpenCheck className="h-4 w-4 text-green-400" />}
+                <span className="text-white/90 font-medium">
+                  {generationStep === 'structure' && 'Crafting the story structure...'}
+                  {generationStep === 'characters' && 'Creating characters...'}
+                  {generationStep === 'scenes' && 'Designing scenes...'}
+                  {generationStep === 'story' && 'Writing the story...'}
+                </span>
+              </div>
+              <div className="h-4 w-4">
+                <Loader2 className="h-4 w-4 animate-spin text-white/60" />
+              </div>
+            </div>
+          )}
+
+          {/* Story Content with Animations */}
           <div className="space-y-12">
+            {/* Story Title and Tagline */}
+            <div className="mb-8 text-center animate-fade-in">
+              <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
+                {storyPackage.title}
+              </h1>
+              <p className="text-xl text-white/80 italic">{storyPackage.tagline}</p>
+            </div>
+
             {/* Story Summary */}
-            <Card className="bg-black/40 border-white/10">
+            <Card className="bg-black/40 border-white/10 transform transition-all duration-500 animate-slide-up">
               <CardContent className="p-6">
                 <h2 className="text-xl font-semibold mb-4">Story Summary</h2>
                 <p className="text-white/90 leading-relaxed">{storyPackage.summary}</p>
@@ -614,11 +660,15 @@ export default function StoryGenerator() {
             </Card>
 
             {/* Characters */}
-            <div>
+            <div className="animate-slide-up" style={{ animationDelay: '200ms' }}>
               <h2 className="text-2xl font-bold mb-4">Characters</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {storyPackage.characters.map((character) => (
-                  <Card key={character.id} className="bg-black/40 border-white/10">
+                {storyPackage.characters.map((character, index) => (
+                  <Card 
+                    key={character.id} 
+                    className="bg-black/40 border-white/10 transform transition-all duration-500 hover:scale-[1.02] hover:border-white/20"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
                     <CardContent className="p-4">
                       <h3 className="text-lg font-semibold">{character.name}</h3>
                       <p className="text-white/70 text-sm mb-2">
@@ -641,13 +691,21 @@ export default function StoryGenerator() {
             </div>
 
             {/* Story Content with Images */}
-            <div className="mt-8 space-y-8">
+            <div className="mt-8 space-y-8 animate-slide-up" style={{ animationDelay: '400ms' }}>
               <h2 className="text-2xl font-bold">Your Story</h2>
-              {storyPackage.scenes.map((scene, index) => renderScene(scene, index))}
+              {storyPackage.scenes.map((scene, index) => (
+                <div 
+                  key={index}
+                  className="transform transition-all duration-500 hover:scale-[1.01]"
+                  style={{ animationDelay: `${index * 150}ms` }}
+                >
+                  {renderScene(scene, index)}
+                </div>
+              ))}
             </div>
 
             {/* Metadata */}
-            <div className="text-sm text-white/60 border-t border-white/10 pt-4 mt-8">
+            <div className="text-sm text-white/60 border-t border-white/10 pt-4 mt-8 animate-fade-in" style={{ animationDelay: '600ms' }}>
               <p>
                 Word Count: {storyPackage.metadata.word_count} • Estimated Reading Time:{" "}
                 {storyPackage.metadata.read_time_minutes} minutes

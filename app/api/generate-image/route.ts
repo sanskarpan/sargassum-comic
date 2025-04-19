@@ -8,7 +8,7 @@ type ImageSize = "1024x1024" | "1024x576" | "1024x683" | "1024x768" | "576x1024"
 
 export async function POST(request: Request) {
   try {
-    const { prompt, comicId, panelNumber, aspectRatio } = await request.json()
+    const { prompt, storyId, sceneIndex, aspectRatio } = await request.json()
 
     console.log("Generating image with prompt:", prompt)
     console.log("Using aspect ratio:", aspectRatio || "default")
@@ -52,10 +52,10 @@ export async function POST(request: Request) {
     // Get base64 image data
     const base64Image = result.image.base64
 
-    // Store image in Vercel Blob if comicId is provided
+    // Store image in Vercel Blob if storyId is provided
     let imageUrl = base64Image
-    if (comicId && panelNumber !== undefined) {
-      imageUrl = await uploadImageToBlob(base64Image, comicId, panelNumber)
+    if (storyId && sceneIndex !== undefined) {
+      imageUrl = await uploadImageToBlob(base64Image, storyId, sceneIndex)
       console.log("Image stored in Vercel Blob:", imageUrl)
     }
 

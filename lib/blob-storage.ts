@@ -1,6 +1,6 @@
 import { put, list, del } from "@vercel/blob"
 
-export async function uploadImageToBlob(imageData: string, comicId: string, panelNumber: number): Promise<string> {
+export async function uploadImageToBlob(imageData: string, storyId: string, sceneIndex: number): Promise<string> {
   try {
     // Remove data URL prefix if present
     const base64Data = imageData.includes("base64,") ? imageData.split("base64,")[1] : imageData
@@ -9,7 +9,7 @@ export async function uploadImageToBlob(imageData: string, comicId: string, pane
     const buffer = Buffer.from(base64Data, "base64")
 
     // Create a unique filename
-    const filename = `comics/${comicId}/panel-${panelNumber}.png`
+    const filename = `stories/${storyId}/scene-${sceneIndex}.png`
 
     // Upload to Vercel Blob
     const blob = await put(filename, buffer, {
@@ -25,10 +25,10 @@ export async function uploadImageToBlob(imageData: string, comicId: string, pane
   }
 }
 
-export async function deleteComicImages(comicId: string): Promise<void> {
+export async function deleteStoryImages(storyId: string): Promise<void> {
   try {
-    // List all blobs for this comic
-    const { blobs } = await list({ prefix: `comics/${comicId}/` })
+    // List all blobs for this story
+    const { blobs } = await list({ prefix: `stories/${storyId}/` })
 
     // Delete each blob
     for (const blob of blobs) {
