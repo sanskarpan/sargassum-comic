@@ -2,6 +2,8 @@ import { openai } from "@ai-sdk/openai"
 import { generateText } from "ai"
 import { NextResponse } from "next/server"
 
+export const runtime = 'edge'
+
 export async function POST(request: Request) {
   try {
     const { requestSpec } = await request.json()
@@ -14,7 +16,7 @@ export async function POST(request: Request) {
 
     // Generate the story package using OpenAI
     const result = await generateText({
-      model: openai("gpt-4o"),
+      model: openai("gpt-4"),
       prompt: `You are a professional storyteller specializing in ${requestSpec.genre || "fantasy"} stories. 
       Create a complete story package based on the following specifications:
       
@@ -107,7 +109,7 @@ export async function POST(request: Request) {
       
       Return ONLY the valid JSON with no additional text or explanation.`,
       temperature: 0.7,
-      maxTokens: 4000,
+      maxTokens: 2000,
     })
 
     // Parse the JSON response
