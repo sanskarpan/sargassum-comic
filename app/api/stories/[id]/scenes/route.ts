@@ -3,10 +3,10 @@ import { createServerSupabaseClient } from "@/lib/supabase"
 
 export async function PUT(
   request: Request,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const storyId = context.params.id
+    const storyId = params.id
     const { sceneIndex, imageUrl } = await request.json()
 
     if (sceneIndex === undefined || !imageUrl) {

@@ -166,9 +166,17 @@ export default function ComicGenerator() {
         // Save the panel to the database
         await savePanel(comicId, firstPrompt, imageUrl, 1)
 
-        // Generate story progression
-        const storyPrompts = await generateStoryProgression(initialPrompt, comicId)
-        setStory(storyPrompts)
+        // Fetch story progression prompts for subsequent panels
+        setIsGenerating(true)
+        try {
+          const prompts = await generateStoryProgression(initialPrompt, comicId)
+          setStory(prompts)
+        } catch (error) {
+          console.error("Failed to get story progression:", error)
+          setError("Failed to generate story progression. Please try again.")
+        } finally {
+          setIsGenerating(false)
+        }
       }
     } catch (error) {
       console.error("Failed to generate initial comic panel:", error)
@@ -188,6 +196,11 @@ export default function ComicGenerator() {
 
     try {
       const nextPrompt = story.shift() || ""
+      // Skip empty prompts
+      if (!nextPrompt.trim()) {
+        setIsGenerating(false)
+        return
+      }
       const fullPrompt = `Comic panel: ${nextPrompt}. Detailed, vibrant, comic book style.`
       lastPromptRef.current = fullPrompt
       const sequenceNumber = comicPanels.length + 1

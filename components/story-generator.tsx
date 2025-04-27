@@ -176,28 +176,8 @@ export default function StoryGenerator() {
   const generateSceneImage = async (scene: Scene, index: number, retryCount = 0) => {
     if (!currentStoryId) {
       console.error("Cannot generate image: No story ID available");
-      console.log("Current story package:", storyPackage);
-      
-      // If we have a story package but no ID, try saving it first
-      if (storyPackage && storyPackage.story && storyPackage.story.length > 0 && !currentStoryId) {
-        try {
-          console.log("Attempting to save story before generating image");
-          const storyId = await createStory(storyPackage);
-          console.log("Story saved with ID:", storyId);
-          setCurrentStoryId(storyId);
-          
-          // Now recursively call this function again with the new story ID
-          setTimeout(() => generateSceneImage(scene, index, retryCount), 500);
-          return;
-        } catch (error) {
-          console.error("Failed to save story before generating image:", error);
-          setError("Failed to save story. Please try again.");
-          return;
-        }
-      } else {
-        setError("Cannot generate image: Story hasn't been saved yet");
-        return;
-      }
+      setError("Cannot generate image: Story hasn't been saved yet. Please wait until your story is saved.");
+      return;
     }
 
     setGeneratingImageForScene(index);
@@ -278,6 +258,7 @@ export default function StoryGenerator() {
     setIsGenerating(true)
     setError(null)
     setGenerationStep('idle')
+    setCurrentStoryId(null)
     setProgress(0)
 
     try {
@@ -451,6 +432,8 @@ export default function StoryGenerator() {
     } catch (error) {
       console.error("Failed to generate story:", error);
       setError(error instanceof Error ? error.message : "Failed to generate story");
+      // Reset UI on failure
+      setStoryPackage(null);
     } finally {
       setIsGenerating(false);
       setGenerationStep('idle');
@@ -474,18 +457,20 @@ export default function StoryGenerator() {
     window.location.reload()
   }
 
-  // Update the scene rendering section to use the ImagePlaceholder
+  // Render each scene with skeleton for paragraphs
   const renderScene = (scene: Scene, index: number) => {
+    // Paragraphs for this scene
+    const paragraphs = storyPackage?.story.find((s) => s.beat === scene.beat)?.paragraphs;
     return (
       <div key={index} className="mb-8">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-semibold">{scene.title}</h3>
+          <h3 className="text-xl font-semibold text-white">{scene.title}</h3>
           {!scene.image_url && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => generateSceneImage(scene, index)}
-              disabled={generatingImageForScene !== null}
+              disabled={!currentStoryId || generatingImageForScene !== null}
               className="bg-black/40 border-white/20"
             >
               {generatingImageForScene === index ? (
@@ -499,12 +484,8 @@ export default function StoryGenerator() {
         </div>
 
         <div className="mb-4 text-sm text-white/70">
-          <p>
-            <strong>Setting:</strong> {scene.setting}
-          </p>
-          <p>
-            <strong>POV:</strong> {scene.pov}
-          </p>
+          <p><strong>Setting:</strong> {scene.setting}</p>
+          <p><strong>POV:</strong> {scene.pov}</p>
         </div>
 
         <div className="mb-6">
@@ -517,16 +498,19 @@ export default function StoryGenerator() {
               />
             </div>
           ) : (
-            <ImagePlaceholder 
-              isGenerating={generatingImageForScene === index} 
-              onClick={() => !generatingImageForScene && generateSceneImage(scene, index)}
+            <ImagePlaceholder
+              isGenerating={generatingImageForScene === index}
+              onClick={() => currentStoryId && generatingImageForScene !== index && generateSceneImage(scene, index)}
             />
           )}
         </div>
 
-        <StoryRenderer
-          content={storyPackage?.story.find((s) => s.beat === scene.beat)?.paragraphs.join("\n\n") || ""}
-        />
+        {/* Paragraph text with shimmer placeholder */}
+        {paragraphs && paragraphs.length > 0 ? (
+          <StoryRenderer content={paragraphs.join("\n\n")} />
+        ) : (
+          <div className="h-40 bg-white/10 rounded animate-pulse"></div>
+        )}
       </div>
     )
   }
@@ -785,64 +769,114 @@ export default function StoryGenerator() {
           <div className="space-y-12">
             {/* Story Title and Tagline */}
             <div className="mb-8 text-center animate-fade-in">
-              <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
-                {storyPackage.title}
-              </h1>
-              <p className="text-xl text-white/80 italic">{storyPackage.tagline}</p>
+              {isGenerating && !storyPackage.title ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-8 bg-white/10 rounded w-1/3 mx-auto"></div>
+                  <div className="h-4 bg-white/10 rounded w-1/2 mx-auto"></div>
+                </div>
+              ) : (
+                <>
+                  <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
+                    {storyPackage.title}
+                  </h1>
+                  <p className="text-xl text-white/80 italic">{storyPackage.tagline}</p>
+                </>
+              )}
             </div>
 
             {/* Story Summary */}
-            <Card className="bg-black/40 border-white/10 transform transition-all duration-500 animate-slide-up">
-              <CardContent className="p-6">
-                <h2 className="text-xl font-semibold mb-4 text-white">Story Summary</h2>
-                <p className="text-white/90 leading-relaxed">{storyPackage.summary}</p>
-              </CardContent>
-            </Card>
+            {isGenerating && !storyPackage.summary ? (
+              <Card className="bg-black/40 border-white/10 transform transition-all duration-500 animate-slide-up">
+                <CardContent className="p-6 space-y-2">
+                  <div className="h-5 bg-white/10 rounded w-1/4 mb-2"></div>
+                  <div className="h-4 bg-white/10 rounded w-full mb-1"></div>
+                  <div className="h-4 bg-white/10 rounded w-5/6"></div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="bg-black/40 border-white/10 transform transition-all duration-500 animate-slide-up">
+                <CardContent className="p-6">
+                  <h2 className="text-xl font-semibold mb-4 text-white">Story Summary</h2>
+                  <p className="text-white/90 leading-relaxed">{storyPackage.summary}</p>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Characters */}
-            <div className="animate-slide-up" style={{ animationDelay: '200ms' }}>
-              <h2 className="text-2xl font-bold mb-4">Characters</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {storyPackage.characters.map((character, index) => (
-                  <Card 
-                    key={character.id} 
-                    className="bg-black/40 border-white/10 transform transition-all duration-500 hover:scale-[1.02] hover:border-white/20"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <CardContent className="p-4">
-                      <h3 className="text-lg font-semibold text-white">{character.name}</h3>
-                      <p className="text-white/70 text-sm mb-2">
-                        <span className="font-medium">{character.role}</span> • {character.arc}
-                      </p>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {character.traits.map((trait, i) => (
-                          <span
-                            key={i}
-                            className="px-2 py-1 bg-white/10 rounded-full text-xs font-medium text-white/80"
-                          >
-                            {trait}
-                          </span>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+            <div className='animate-slide-up' style={{ animationDelay: '200ms' }}>
+              <h2 className='text-2xl font-bold mb-4'>Characters</h2>
+              {!storyPackage.characters.length ? (
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                  {[1,2].map((i) => (
+                    <Card key={i} className='bg-black/40 border-white/10 animate-pulse'>
+                      <CardContent className='p-4 space-y-2'>
+                        <div className='h-6 bg-white/10 rounded w-3/4'></div>
+                        <div className='h-4 bg-white/10 rounded w-1/2'></div>
+                        <div className='flex space-x-2'>
+                          <div className='h-4 bg-white/10 rounded w-16'></div>
+                          <div className='h-4 bg-white/10 rounded w-12'></div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                  {storyPackage.characters.map((character, index) => (
+                    <Card 
+                      key={character.id} 
+                      className="bg-black/40 border-white/10 transform transition-all duration-500 hover:scale-[1.02] hover:border-white/20"
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      <CardContent className="p-4">
+                        <h3 className="text-lg font-semibold text-white">{character.name}</h3>
+                        <p className="text-white/70 text-sm mb-2">
+                          <span className="font-medium">{character.role}</span> • {character.arc}
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {character.traits.map((trait, i) => (
+                            <span
+                              key={i}
+                              className="px-2 py-1 bg-white/10 rounded-full text-xs font-medium text-white/80"
+                            >
+                              {trait}
+                            </span>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Story Content with Images */}
-            <div className="mt-8 space-y-8 animate-slide-up" style={{ animationDelay: '400ms' }}>
-              <h2 className="text-2xl font-bold">Your Story</h2>
-              {storyPackage.scenes.map((scene, index) => (
-                <div 
-                  key={index}
-                  className="transform transition-all duration-500 hover:scale-[1.01]"
-                  style={{ animationDelay: `${index * 150}ms` }}
-                >
-                  {renderScene(scene, index)}
-                </div>
-              ))}
-            </div>
+            {/* Story Content with Images and shimmer scenes */}
+            {isGenerating && storyPackage.scenes.length === 0 ? (
+              <div className="mt-8 space-y-8 animate-slide-up" style={{ animationDelay: '400ms' }}>
+                <h2 className="text-2xl font-bold text-white">Your Story</h2>
+                {[1,2,3].map((i) => (
+                  <div key={i} className="mb-8 animate-pulse space-y-4">
+                    <div className="h-6 bg-white/10 rounded w-1/3"></div>
+                    <div className="h-4 bg-white/10 rounded w-1/2"></div>
+                    <div className="aspect-video bg-white/10 rounded-lg"></div>
+                    <div className="h-40 bg-white/10 rounded-lg"></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-8 space-y-8 animate-slide-up" style={{ animationDelay: '400ms' }}>
+                <h2 className="text-2xl font-bold">Your Story</h2>
+                {storyPackage.scenes.map((scene, index) => (
+                  <div 
+                    key={index}
+                    className="transform transition-all duration-500 hover:scale-[1.01]"
+                    style={{ animationDelay: `${index * 150}ms` }}
+                  >
+                    {renderScene(scene, index)}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Metadata */}
             <div className="text-sm text-white/60 border-t border-white/10 pt-4 mt-8 animate-fade-in" style={{ animationDelay: '600ms' }}>

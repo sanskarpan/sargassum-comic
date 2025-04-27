@@ -45,6 +45,7 @@ export async function uploadImageToBlob(imageData: string, storyId: string, scen
         access: "public",
         contentType: "image/png",
         addRandomSuffix: false, // Use exact filename
+        allowOverwrite: true,   // Overwrite existing blob if present
       });
   
       if (!blob || !blob.url) {
